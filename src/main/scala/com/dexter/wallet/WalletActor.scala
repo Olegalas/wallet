@@ -40,7 +40,7 @@ class WalletActor() extends Actor with ActorLogging {
     }
   }
 
-  private def process(cmd: UpdateWalletCommand): Unit = {
+  private def processCommand(cmd: UpdateWalletCommand): Unit = {
     withWallet(cmd.account) { wallet =>
       processTransaction {
         cmd match {
@@ -54,7 +54,7 @@ class WalletActor() extends Actor with ActorLogging {
   }
 
   def receive: Receive = {
-    case cmd: UpdateWalletCommand => process(cmd)
+    case cmd: UpdateWalletCommand => processCommand(cmd)
     case query: GetBalance =>
       query.identity match {
         case AdminUser(_) =>
