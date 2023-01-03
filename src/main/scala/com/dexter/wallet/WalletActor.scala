@@ -5,64 +5,70 @@ import com.dexter.wallet.model.DomainModel.{DecreaseBalance, GetBalance, Increas
 import com.dexter.wallet.model.DomainResponse.Failure
 import com.dexter.wallet.model.Identity.{AdminUser, RegularUser}
 
+import scala.collection.mutable
+import scala.language.reflectiveCalls
+
 class WalletActor() extends Actor with ActorLogging {
 
+  private type UpdateWalletCommand = {
+    def account: String
+    def money: Int
+  }
+
   // Imagine it is persistent actor with state.
-  var state = Map(
+  private val state = mutable.HashMap(
     "Jason" -> Wallet("Jason", 1000, List(InitialTransaction(1000))),
     "James" -> Wallet("James", 5000, List(InitialTransaction(5000))),
     "Kirk" -> Wallet("James", 0, List(InitialTransaction(0))),
     "Lars" -> Wallet("James", 0, List(InitialTransaction(0)))
   )
 
-  // FIXME: function with side effect
-  def updateState(walletToUpdate: Wallet): Unit = {
-    state = state.updated(walletToUpdate.account, walletToUpdate)
+  private def updateState(walletToUpdate: Wallet): Unit = {
+    state.update(walletToUpdate.account, walletToUpdate)
   }
 
-  override def preStart(): Unit = {
-    log.info("WalletActor actor was launched")
-  }
-
-  def processTransaction(wallet: => Wallet): Unit = {
+  private def processTransaction(wallet: => Wallet): Unit = {
     val updatedWallet = wallet
     updateState(updatedWallet)
     sender() ! updatedWallet
   }
 
+  private def withWallet(account: String)(process: Wallet => Unit): Unit = {
+    state.get(account) match {
+      case Some(wallet) => process(wallet)
+      case None => sender() ! Failure(s"Account: $account was not found")
+    }
+  }
+
+  private def process(cmd: UpdateWalletCommand): Unit = {
+    withWallet(cmd.account) { wallet =>
+      processTransaction {
+        cmd match {
+          case cmd: IncreaseBalance =>
+            wallet.increase(cmd.money + feeCalculator(wallet.transactions.size))
+          case cmd: DecreaseBalance =>
+            wallet.decrease(cmd.money - feeCalculator(wallet.transactions.size))
+        }
+      }
+    }
+  }
+
   def receive: Receive = {
-    case cmd: IncreaseBalance =>
-      state.get(cmd.account) match {
-        case Some(wallet) =>
-          processTransaction {
-            wallet.increase(cmd.money - feeCalculator(wallet.transactions.size))
-          }
-        case None => sender() ! Failure(s"Account: ${cmd.account} was not found")
-      }
-    case cmd: DecreaseBalance =>
-      state.get(cmd.account) match {
-        case Some(wallet) =>
-          processTransaction {
-            wallet.decrease(cmd.money + feeCalculator(wallet.transactions.size))
-          }
-        case None => sender() ! Failure(s"Account: ${cmd.account} was not found")
-      }
-    case cmd: GetBalance =>
-      cmd.identity match {
+    case cmd: UpdateWalletCommand => process(cmd)
+    case query: GetBalance =>
+      query.identity match {
         case AdminUser(_) =>
           sender() ! Wallets(state.values.toList)
         case RegularUser(_) =>
-          state.get(cmd.identity.accountName) match {
-            case Some(wallet) => sender() ! wallet
-            case None => sender() ! Failure(s"Account: ${cmd.identity.accountName} was not found")
+          withWallet(query.identity.accountName) { wallet =>
+            sender() ! wallet
           }
       }
-
     case x => log.warning("Received unknown message: {}", x)
   }
 
   // Let it be in Int.. just for testing
-  def feeCalculator(transactions: Int): Int = {
+  private def feeCalculator(transactions: Int): Int = {
     transactions match {
       case count if count < 100 => 3
       case count if count > 100 || count < 1000 => 2
