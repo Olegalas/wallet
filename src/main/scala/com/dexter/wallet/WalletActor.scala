@@ -53,17 +53,20 @@ class WalletActor() extends Actor with ActorLogging {
     }
   }
 
+  private def processQuery(query: GetBalance): Unit = {
+    query.identity match {
+      case AdminUser(_) =>
+        sender() ! Wallets(state.values.toList)
+      case RegularUser(_) =>
+        withWallet(query.identity.accountName) { wallet =>
+          sender() ! wallet
+        }
+    }
+  }
+
   def receive: Receive = {
     case cmd: UpdateWalletCommand => processCommand(cmd)
-    case query: GetBalance =>
-      query.identity match {
-        case AdminUser(_) =>
-          sender() ! Wallets(state.values.toList)
-        case RegularUser(_) =>
-          withWallet(query.identity.accountName) { wallet =>
-            sender() ! wallet
-          }
-      }
+    case query: GetBalance => processQuery(query)
     case x => log.warning("Received unknown message: {}", x)
   }
 
