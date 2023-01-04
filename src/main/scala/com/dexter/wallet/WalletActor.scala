@@ -1,7 +1,7 @@
 package com.dexter.wallet
 
 import akka.actor.{Actor, ActorLogging, Props}
-import com.dexter.wallet.model.DomainModel.{DecreaseBalance, GetBalance, IncreaseBalance, InitialTransaction, Wallet, Wallets}
+import com.dexter.wallet.model.DomainModel.{Command, DecreaseBalance, GetBalance, IncreaseBalance, InitialTransaction, Wallet, Wallets}
 import com.dexter.wallet.model.DomainResponse.Failure
 import com.dexter.wallet.model.Identity.{AdminUser, RegularUser}
 
@@ -10,17 +10,12 @@ import scala.language.reflectiveCalls
 
 class WalletActor() extends Actor with ActorLogging {
 
-  private type UpdateWalletCommand = {
-    def account: String
-    def money: Int
-  }
-
   // Imagine it is persistent actor with state.
   private val state = mutable.HashMap(
     "Jason" -> Wallet("Jason", 1000, List(InitialTransaction(1000))),
     "James" -> Wallet("James", 5000, List(InitialTransaction(5000))),
-    "Kirk" -> Wallet("James", 0, List(InitialTransaction(0))),
-    "Lars" -> Wallet("James", 0, List(InitialTransaction(0)))
+    "Kirk" -> Wallet("Kirk", 0, List(InitialTransaction(0))),
+    "Lars" -> Wallet("Lars", 0, List(InitialTransaction(0)))
   )
 
   private def updateState(walletToUpdate: Wallet): Unit = {
@@ -40,7 +35,7 @@ class WalletActor() extends Actor with ActorLogging {
     }
   }
 
-  private def processCommand(cmd: UpdateWalletCommand): Unit = {
+  private def processCommand(cmd: Command): Unit = {
     withWallet(cmd.account) { wallet =>
       processTransaction {
         cmd match {
@@ -65,7 +60,7 @@ class WalletActor() extends Actor with ActorLogging {
   }
 
   def receive: Receive = {
-    case cmd: UpdateWalletCommand => processCommand(cmd)
+    case cmd: Command => processCommand(cmd)
     case query: GetBalance => processQuery(query)
     case x => log.warning("Received unknown message: {}", x)
   }

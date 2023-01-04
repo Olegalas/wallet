@@ -3,9 +3,14 @@ package com.dexter.wallet.model
 object DomainModel {
 
   // Commands
-  case class IncreaseBalance(account: String, money: Int)
+  sealed trait Command {
+    def account: String
+    def money: Int
+  }
 
-  case class DecreaseBalance(account: String, money: Int)
+  case class IncreaseBalance(account: String, money: Int) extends Command
+
+  case class DecreaseBalance(account: String, money: Int) extends Command
 
   case class GetBalance(identity: Identity)
 
@@ -21,10 +26,10 @@ object DomainModel {
 
   case class Wallet(account: String, balance: Int, transactions: List[Transaction]) {
     def decrease(money: Int): Wallet =
-      this.copy(balance = balance - money, transactions = IncreaseTransaction(money) :: transactions)
+      this.copy(balance = balance - money, transactions = DecreaseTransaction(money) :: transactions)
 
     def increase(money: Int): Wallet =
-      this.copy(balance = balance + money, transactions = DecreaseTransaction(money) :: transactions)
+      this.copy(balance = balance + money, transactions = IncreaseTransaction(money) :: transactions)
   }
 
   case class Wallets(wallets: List[Wallet])
